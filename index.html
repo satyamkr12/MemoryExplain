@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Management — Made Simple</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Lora:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --card: #1a1a26;
+    --border: #2a2a3a;
+    --accent: #f0c040;
+    --accent2: #60d0ff;
+    --accent3: #ff6b6b;
+    --accent4: #7effa0;
+    --text: #e8e8f0;
+    --muted: #7878a0;
+    --stack-color: #60d0ff;
+    --heap-color: #f0c040;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Lora', serif;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(96,208,255,0.08) 0%, transparent 70%);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulse 4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{transform:translate(-50%,-50%) scale(1);} 50%{transform:translate(-50%,-50%) scale(1.2);} }
+
+  .hero-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    color: var(--accent2);
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.6s ease forwards;
+  }
+  .hero h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2.5rem, 8vw, 6rem);
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.8s ease forwards;
+  }
+  .hero h1 span { color: var(--accent); }
+  .hero p {
+    max-width: 560px;
+    color: var(--muted);
+    font-size: 1.1rem;
+    margin-bottom: 2.5rem;
+    animation: fadeUp 1s ease forwards;
+  }
+  .hero-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 0.85rem 2rem;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+    animation: fadeUp 1.2s ease forwards;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .hero-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(240,192,64,0.3); }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:translateY(0);} }
+
+  /* NAV DOTS */
+  .nav-dots {
+    position: fixed;
+    right: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    z-index: 100;
+  }
+  .nav-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: background 0.3s, transform 0.3s;
+  }
+  .nav-dot.active { background: var(--accent); transform: scale(1.5); }
+
+  /* SECTIONS */
+  .section {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 6rem 2rem;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .section.visible { opacity: 1; transform: translateY(0); }
+
+  .section-number {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.25em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .section h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+    line-height: 1.1;
+  }
+  .section h2 .highlight { color: var(--accent2); }
+  .section > p { color: #c0c0d8; margin-bottom: 2rem; font-size: 1.05rem; }
+
+  /* CARDS */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 1.75rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+    transition: border-color 0.3s;
+  }
+  .card:hover { border-color: var(--accent2); }
+  .card-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+  .card h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .card p { color: #a0a0c0; font-size: 0.95rem; }
+  .card .analogy {
+    margin-top: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: rgba(96,208,255,0.06);
+    border-left: 3px solid var(--accent2);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--accent2);
+    font-style: italic;
+  }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  @media(max-width:600px){ .grid-2{grid-template-columns:1fr;} }
+
+  /* INTERACTIVE RAM VISUALIZER */
+  .ram-visual {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    margin-top: 2rem;
+  }
+  .ram-visual h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+    color: var(--accent4);
+  }
+  .ram-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    margin-bottom: 1.5rem;
+  }
+  .ram-cell {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.25s;
+    font-size: 0.65rem;
+    font-family: 'DM Mono', monospace;
+    position: relative;
+  }
+  .ram-cell:hover { border-color: var(--accent); }
+  .ram-cell.stack-cell { background: rgba(96,208,255,0.12); border-color: rgba(96,208,255,0.4); }
+  .ram-cell.heap-cell { background: rgba(240,192,64,0.12); border-color: rgba(240,192,64,0.4); }
+  .ram-cell.empty-cell { opacity: 0.4; }
+  .ram-cell .addr { color: var(--muted); font-size: 0.55rem; }
+  .ram-cell .val { font-size: 0.8rem; font-weight: 500; }
+  .ram-cell.stack-cell .val { color: var(--stack-color); }
+  .ram-cell.heap-cell .val { color: var(--heap-color); }
+
+  .ram-controls { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .ram-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.03em;
+  }
+  .ram-btn.stack-btn { color: var(--stack-color); border-color: var(--stack-color); }
+  .ram-btn.stack-btn:hover { background: rgba(96,208,255,0.1); }
+  .ram-btn.heap-btn { color: var(--heap-color); border-color: var(--heap-color); }
+  .ram-btn.heap-btn:hover { background: rgba(240,192,64,0.1); }
+  .ram-btn.reset-btn { color: var(--muted); border-color: var(--border); }
+  .ram-btn.reset-btn:hover { border-color: var(--muted); }
+
+  .ram-legend { display: flex; gap: 1.5rem; margin-top: 1rem; }
+  .legend-item { display: flex; align-items: center; gap: 0.5rem; font-family: 'DM Mono', monospace; font-size: 0.75rem; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .legend-dot.s { background: var(--stack-color); }
+  .legend-dot.h { background: var(--heap-color); }
+
+  .ram-info {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--accent4);
+    min-height: 1.5rem;
+    margin-top: 0.5rem;
+    transition: opacity 0.3s;
+  }
+
+  /* STACK VS HEAP BATTLE */
+  .battle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    margin-top: 2rem;
+    overflow: hidden;
+  }
+  @media(max-width:600px){ .battle{grid-template-columns:1fr;} }
+  .battle-side {
+    padding: 1.75rem;
+  }
+  .battle-side.stack-side { background: rgba(96,208,255,0.04); border-right: 1px solid var(--border); }
+  .battle-side.heap-side { background: rgba(240,192,64,0.04); }
+  .battle-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+  }
+  .battle-side.stack-side .battle-title { color: var(--stack-color); }
+  .battle-side.heap-side .battle-title { color: var(--heap-color); }
+  .battle-list { list-style: none; }
+  .battle-list li {
+    font-size: 0.9rem;
+    color: #a0a0c0;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .battle-list li::before { content: '→'; color: var(--muted); flex-shrink: 0; }
+  .battle-list li strong { color: var(--text); }
+
+  /* CODE BLOCK */
+  .code-block {
+    background: #0d0d14;
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+    line-height: 1.9;
+    position: relative;
+  }
+  .code-block::before {
+    content: 'JS';
+    position: absolute;
+    top: 0.75rem; right: 0.75rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+  }
+  .c-kw { color: #c084fc; }
+  .c-var { color: var(--accent2); }
+  .c-str { color: var(--accent4); }
+  .c-num { color: var(--accent); }
+  .c-cmt { color: var(--muted); font-style: italic; }
+  .c-addr { color: var(--accent3); }
+
+  /* MEMORY MAP DEMO */
+  .mem-map {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+  }
+  @media(max-width:600px){ .mem-map{grid-template-columns:1fr;} }
+  .mem-col {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 1.25rem;
+  }
+  .mem-col-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .stack-col .mem-col-title { color: var(--stack-color); }
+  .heap-col .mem-col-title { color: var(--heap-color); }
+  .mem-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    transition: background 0.3s;
+  }
+  .mem-row:last-child { border-bottom: none; }
+  .mem-row .var-name { color: var(--accent2); }
+  .mem-row .mem-addr { color: var(--muted); font-size: 0.72rem; }
+  .mem-row .mem-val { color: var(--accent4); }
+  .mem-row.pointer-row .mem-val { color: var(--accent3); }
+  .heap-row { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-family:'DM Mono',monospace; font-size:0.8rem; }
+  .heap-row .h-addr { color: var(--accent3); }
+  .heap-row .h-val { color: var(--heap-color); }
+
+  /* GC DEMO */
+  .gc-demo {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    margin-top: 2rem;
+  }
+  .gc-demo h3 { font-family:'Syne',sans-serif; font-size:1.1rem; font-weight:700; margin-bottom:1.25rem; color:var(--accent4); }
+  .gc-stage { display:flex; flex-wrap:wrap; gap:0.75rem; margin-bottom:1.5rem; }
+  .gc-cell {
+    font-family:'DM Mono',monospace;
+    font-size:0.75rem;
+    padding:0.5rem 0.75rem;
+    border:1px solid;
+    transition:all 0.5s;
+  }
+  .gc-cell.live { border-color:var(--accent4); color:var(--accent4); background:rgba(126,255,160,0.06); }
+  .gc-cell.dead { border-color:var(--accent3); color:var(--accent3); background:rgba(255,107,107,0.06); }
+  .gc-cell.cleared { border-color:var(--border); color:var(--muted); background:transparent; text-decoration:line-through; }
+  .gc-controls { display:flex; gap:0.75rem; }
+  .gc-btn {
+    font-family:'DM Mono',monospace; font-size:0.8rem; padding:0.6rem 1.25rem;
+    border:1px solid var(--accent4); color:var(--accent4); background:transparent; cursor:pointer; transition:all 0.2s;
+  }
+  .gc-btn:hover { background:rgba(126,255,160,0.08); }
+  .gc-log { margin-top:1rem; font-family:'DM Mono',monospace; font-size:0.78rem; color:var(--muted); min-height:1.5rem; }
+
+  /* SMI Section */
+  .smi-demo {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    margin-top: 2rem;
+  }
+  .smi-demo h3 { font-family:'Syne',sans-serif; font-size:1.1rem; font-weight:700; margin-bottom:0.5rem; color:var(--accent); }
+  .smi-demo p { color:#a0a0c0; font-size:0.9rem; margin-bottom:1.5rem; }
+  .bit-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .bit {
+    width: 28px; height: 28px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'DM Mono',monospace; font-size:0.85rem;
+    border:1px solid var(--border);
+    transition: all 0.3s;
+  }
+  .bit.one { background:rgba(240,192,64,0.2); border-color:var(--accent); color:var(--accent); }
+  .bit.zero { background:var(--surface); color:var(--muted); }
+  .bit.tag { border-color:var(--accent3) !important; color:var(--accent3) !important; }
+  .bit.tag.one { background:rgba(255,107,107,0.15); }
+  .bit-label { font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--muted); margin-left:0.5rem; }
+  .smi-input-row { display:flex; gap:0.75rem; align-items:center; margin-top:1rem; flex-wrap:wrap; }
+  .smi-input {
+    font-family:'DM Mono',monospace; font-size:0.9rem;
+    background:var(--surface); border:1px solid var(--border); color:var(--text);
+    padding:0.5rem 0.75rem; width:120px;
+  }
+  .smi-input:focus { outline:none; border-color:var(--accent); }
+
+  /* QUIZ */
+  .quiz-section { margin-top: 2rem; }
+  .quiz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 1.75rem;
+    margin-bottom: 1.25rem;
+    transition: border-color 0.3s;
+  }
+  .quiz-q {
+    font-family:'Syne',sans-serif;
+    font-size:1rem;
+    font-weight:700;
+    margin-bottom:1rem;
+  }
+  .quiz-options { display:flex; flex-direction:column; gap:0.6rem; }
+  .quiz-opt {
+    font-family:'DM Mono',monospace; font-size:0.82rem;
+    padding:0.6rem 1rem;
+    border:1px solid var(--border);
+    background:var(--surface);
+    cursor:pointer;
+    text-align:left;
+    color:var(--text);
+    transition:all 0.2s;
+  }
+  .quiz-opt:hover { border-color:var(--accent2); }
+  .quiz-opt.correct { border-color:var(--accent4); background:rgba(126,255,160,0.08); color:var(--accent4); }
+  .quiz-opt.wrong { border-color:var(--accent3); background:rgba(255,107,107,0.08); color:var(--accent3); }
+  .quiz-feedback { margin-top:0.75rem; font-size:0.88rem; color:var(--muted); display:none; font-style:italic; }
+  .quiz-feedback.show { display:block; }
+
+  /* DIVIDER */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0 2rem;
+  }
+
+  /* PROGRESS BAR */
+  .progress-bar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 2px;
+    background: var(--accent);
+    z-index: 200;
+    transition: width 0.1s;
+    width: 0%;
+  }
+
+  /* FOOTER */
+  footer {
+    text-align:center;
+    padding:3rem;
+    font-family:'DM Mono',monospace;
+    font-size:0.75rem;
+    color:var(--muted);
+    border-top:1px solid var(--border);
+  }
+
+  /* Tooltip */
+  .tooltip-wrap { position:relative; display:inline-block; cursor:help; border-bottom:1px dashed var(--accent2); }
+  .tooltip-wrap .tip {
+    display:none;
+    position:absolute;
+    bottom:130%;
+    left:50%;
+    transform:translateX(-50%);
+    background:#1a1a2e;
+    border:1px solid var(--accent2);
+    color:var(--text);
+    font-size:0.78rem;
+    padding:0.5rem 0.75rem;
+    white-space:nowrap;
+    font-family:'DM Mono',monospace;
+    z-index:50;
+    pointer-events:none;
+  }
+  .tooltip-wrap:hover .tip { display:block; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<nav class="nav-dots" id="navDots"></nav>
+
+<!-- HERO -->
+<section class="hero" id="s0">
+  <div class="hero-label">// Computer Science · Beginner Friendly</div>
+  <h1>How Your Computer <span>Remembers</span> Stuff</h1>
+  <p>A visual, interactive deep-dive into memory management — built for curious minds who want to think like an engineer, not just memorize facts.</p>
+  <button class="hero-btn" onclick="document.getElementById('s1').scrollIntoView({behavior:'smooth'})">Start Learning →</button>
+</section>
+
+<hr class="divider">
+
+<!-- SECTION 1: THE BASICS -->
+<section class="section" id="s1">
+  <div class="section-number">// 01 — The Big Picture</div>
+  <h2>Where Does Your Code <span class="highlight">Actually Live?</span></h2>
+  <p>Before anything runs, your program is just a file sitting on your hard drive (SSD). Think of it like a book on a shelf — it's stored, but nobody's reading it yet. To actually run, the code needs to be loaded somewhere faster.</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-icon">💾</div>
+      <h3>SSD / Hard Disk</h3>
+      <p>This is <strong>permanent storage</strong>. Your files live here even when the power is off. But it's slow — like a library across town.</p>
+      <div class="analogy">📚 Think of it as: A bookshelf in your room. Books exist, but you can't read them instantly.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <h3>RAM (Random Access Memory)</h3>
+      <p>This is <strong>temporary, fast storage</strong>. When you run a program, it's copied here. Much faster than SSD, but wiped when you turn off your computer.</p>
+      <div class="analogy">📖 Think of it as: The book you're currently reading — open on your desk, instantly accessible.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🧠</div>
+      <h3>CPU (Processor)</h3>
+      <p>The CPU <strong>executes instructions</strong>. It reads from RAM, not from SSD — because SSD is too slow. The CPU is like your brain; RAM is what's right in front of you.</p>
+      <div class="analogy">🧑‍💻 Think of it as: Your brain reading the open book on your desk.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔢</div>
+      <h3>RAM is Byte-Addressable</h3>
+      <p>RAM is divided into tiny slots called <strong>bytes</strong>, each with a unique address (like a house number). To find data, you use its address.</p>
+      <div class="analogy">🏘️ Think of it as: A street of houses — each house has a number, and any house can be visited directly.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- SECTION 2: INTERACTIVE RAM -->
+<section class="section" id="s2">
+  <div class="section-number">// 02 — Interactive Demo</div>
+  <h2>Play with <span class="highlight">RAM Memory</span></h2>
+  <p>RAM is just a bunch of numbered slots. Click the buttons below to allocate Stack or Heap memory and watch the cells light up. This is exactly what happens when your JavaScript code runs!</p>
+
+  <div class="ram-visual">
+    <h3>🖥️ Simulated RAM — 32 bytes</h3>
+    <div class="ram-controls">
+      <button class="ram-btn stack-btn" onclick="allocStack()">+ Allocate Stack (int)</button>
+      <button class="ram-btn heap-btn" onclick="allocHeap()">+ Allocate Heap (string)</button>
+      <button class="ram-btn reset-btn" onclick="resetRam()">↺ Reset</button>
+    </div>
+    <div class="ram-grid" id="ramGrid"></div>
+    <div class="ram-legend">
+      <div class="legend-item"><div class="legend-dot s"></div><span style="color:var(--stack-color)">Stack</span></div>
+      <div class="legend-item"><div class="legend-dot h"></div><span style="color:var(--heap-color)">Heap</span></div>
+    </div>
+    <div class="ram-info" id="ramInfo">← Click a button to allocate memory</div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- SECTION 3: STACK VS HEAP -->
+<section class="section" id="s3">
+  <div class="section-number">// 03 — The Big Divide</div>
+  <h2>Stack <span class="highlight">vs</span> Heap</h2>
+  <p>RAM is split into two main regions used very differently. Understanding this is the secret to understanding nearly all of memory management.</p>
+
+  <div class="battle">
+    <div class="battle-side stack-side">
+      <div class="battle-title">📦 STACK</div>
+      <ul class="battle-list">
+        <li><strong>Small</strong> — typically KB to a few MB</li>
+        <li><strong>Organized</strong> — like a stack of plates, LIFO (Last In, First Out)</li>
+        <li><strong>Fast</strong> — memory is pre-arranged, no searching</li>
+        <li><strong>Fixed size</strong> — only stores things whose size is known in advance</li>
+        <li><strong>Auto-cleaned</strong> — memory freed when function ends</li>
+        <li>Stores: integers, booleans, pointers/references</li>
+      </ul>
+    </div>
+    <div class="battle-side heap-side">
+      <div class="battle-title">🌊 HEAP</div>
+      <ul class="battle-list">
+        <li><strong>Large</strong> — can be MBs to GBs</li>
+        <li><strong>Flexible</strong> — allocate anywhere there's free space</li>
+        <li><strong>Slower</strong> — must search for free space</li>
+        <li><strong>Variable size</strong> — perfect for strings, objects, arrays</li>
+        <li><strong>Manual/GC</strong> — needs garbage collection or manual freeing</li>
+        <li>Stores: strings, objects, arrays, dynamic data</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-icon">🎯</div>
+    <h3>The Real-World Analogy</h3>
+    <p>Imagine you're at a restaurant:</p>
+    <p style="margin-top:0.75rem; color:#a0a0c0"><strong style="color:var(--stack-color)">Stack</strong> = The set table with fixed positions for each item — fork left, knife right, glass above. Everything has a predictable spot. Fast to set, fast to clear.</p>
+    <p style="margin-top:0.5rem; color:#a0a0c0"><strong style="color:var(--heap-color)">Heap</strong> = The kitchen storage area. Ingredients (strings, objects) go anywhere there's space. Very flexible, but someone needs to clean it up when a dish is done.</p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- SECTION 4: HOW JS USES MEMORY -->
+<section class="section" id="s4">
+  <div class="section-number">// 04 — JavaScript in Action</div>
+  <h2>What Happens When You Write <span class="highlight">JavaScript?</span></h2>
+  <p>Let's trace exactly what JavaScript does in memory when you write real code. This will make variables, pointers, and references click instantly.</p>
+
+  <div class="code-block">
+<span class="c-kw">let</span> <span class="c-var">a</span> = <span class="c-num">10</span>;          <span class="c-cmt">// primitive — number</span>
+<span class="c-kw">let</span> <span class="c-var">b</span> = <span class="c-num">20</span>;          <span class="c-cmt">// primitive — number</span>
+<span class="c-kw">let</span> <span class="c-var">name</span> = <span class="c-str">"Rohit"</span>;   <span class="c-cmt">// non-primitive — string</span>
+<span class="c-kw">let</span> <span class="c-var">flag</span> = <span class="c-kw">true</span>;     <span class="c-cmt">// primitive — boolean</span>
+  </div>
+
+  <p style="color:#a0a0c0; margin-bottom:1.25rem">Here's what actually happens in memory (simplified):</p>
+
+  <div class="mem-map">
+    <div class="mem-col stack-col">
+      <div class="mem-col-title">📦 Stack</div>
+      <div class="mem-row">
+        <span class="var-name">a</span>
+        <span class="mem-addr">0x0001</span>
+        <span class="mem-val">10</span>
+      </div>
+      <div class="mem-row">
+        <span class="var-name">b</span>
+        <span class="mem-addr">0x0002</span>
+        <span class="mem-val">20</span>
+      </div>
+      <div class="mem-row pointer-row">
+        <span class="var-name">name</span>
+        <span class="mem-addr">0x0003</span>
+        <span class="mem-val">→ 0xA100</span>
+      </div>
+      <div class="mem-row">
+        <span class="var-name">flag</span>
+        <span class="mem-addr">0x0004</span>
+        <span class="mem-val">true</span>
+      </div>
+    </div>
+    <div class="mem-col heap-col">
+      <div class="mem-col-title">🌊 Heap</div>
+      <div class="heap-row">
+        <span class="h-addr">0xA100</span>
+        <span class="h-val">"Rohit" (5 bytes)</span>
+      </div>
+      <div class="heap-row" style="color:var(--muted); font-size:0.75rem; padding-top:1rem;">
+        <span>← name's stack entry points here</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-icon">💡</div>
+    <h3>Why does <code style="color:var(--accent2)">name</code> go to the heap?</h3>
+    <p>A number is always 4 or 8 bytes — the stack can pre-assign exactly that much space. But a string like <code style="color:var(--accent4)">"Rohit"</code> could be 5 characters or 5000. Since the stack needs to know the size upfront, strings go to the heap where space is flexible. The stack just holds a <strong>pointer</strong> (an address) pointing to where the string actually lives in the heap.</p>
+    <div class="analogy">📬 Pointer analogy: Stack holds your friend's home address written on a sticky note. The actual house (data) is in the heap. To find "Rohit", you look at the sticky note → then go to that address.</div>
+  </div>
+
+  <div class="card" style="margin-top:1rem">
+    <div class="card-icon">🔒</div>
+    <h3>Immutability — Why Strings Don't Change, They Rebirth</h3>
+    <p>In JavaScript, primitives (numbers, strings, booleans) are <strong>immutable</strong>. When you do <code style="color:var(--accent2)">name = "Rahul"</code>, JavaScript doesn't overwrite "Rohit" in the heap. It creates a brand new slot in heap with "Rahul" and updates the pointer in the stack to point to the new location. "Rohit" is now orphaned — waiting to be garbage collected.</p>
+    <div class="analogy">🏠 Moving analogy: You didn't renovate your old house. You built a brand new house and gave people the new address. The old house sits empty until someone demolishes it.</div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- SECTION 5: GARBAGE COLLECTION -->
+<section class="section" id="s5">
+  <div class="section-number">// 05 — The Janitor of Memory</div>
+  <h2>Garbage Collection — <span class="highlight">Automatic Memory Cleanup</span></h2>
+  <p>Over time, heap memory fills with data nobody's using anymore (like our orphaned "Rohit" string). JavaScript's <strong>Garbage Collector (GC)</strong> automatically finds and deletes this abandoned data.</p>
+
+  <div class="card">
+    <div class="card-icon">🧹</div>
+    <h3>How GC Works — Mark & Sweep</h3>
+    <p>The GC starts from your active stack variables, follows all their pointers, and <strong>"marks"</strong> every heap location that's reachable. Anything NOT marked gets <strong>"swept"</strong> (freed). It's like tracing every path from your front door — rooms you can reach are kept, sealed-off rooms are demolished.</p>
+  </div>
+
+  <div class="gc-demo">
+    <h3>🎮 Interactive Garbage Collector</h3>
+    <p style="color:#a0a0c0; font-size:0.88rem; margin-bottom:1rem;">The green cells are <strong>live</strong> (referenced by stack). Red are <strong>unreferenced</strong>. Run the GC to free them!</p>
+    <div class="gc-stage" id="gcStage"></div>
+    <div class="gc-controls">
+      <button class="gc-btn" onclick="runGC()">🧹 Run Garbage Collector</button>
+      <button class="gc-btn" onclick="gcOrphan()">💀 Orphan a Variable</button>
+      <button class="gc-btn" onclick="resetGC()">↺ Reset</button>
+    </div>
+    <div class="gc-log" id="gcLog">← Orphan some variables, then run the GC</div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- SECTION 6: SMI OPTIMIZATION -->
+<section class="section" id="s6">
+  <div class="section-number">// 06 — Engine Tricks</div>
+  <h2>SMI — The <span class="highlight">Speed Hack</span> for Small Numbers</h2>
+  <p>Here's a real optimization that JavaScript engines like V8 (Chrome's engine) use. If a number is small enough, instead of storing it in the heap and creating a pointer, the engine stores the value <em>directly inside the pointer itself</em>. Mind-blowing, right?</p>
+
+  <div class="card">
+    <div class="card-icon">🏎️</div>
+    <h3>The Problem with Loop Counters</h3>
+    <p>Imagine a loop running 1 million times. If each iteration of <code style="color:var(--accent2)">i++</code> required allocating heap memory, updating a pointer, and then garbage collecting — it'd be catastrophically slow. So V8 uses a trick called <strong>SMI (Small Integer)</strong> optimization.</p>
+    <div class="analogy">📦 Instead of putting "3" in a warehouse (heap) and writing the warehouse address on a notepad (stack pointer), you just write "3" directly on the notepad. Skip the warehouse entirely.</div>
+  </div>
+
+  <div class="smi-demo">
+    <h3>⚙️ How the Tag Bit Works</h3>
+    <p>V8 uses the <span style="color:var(--accent3)">last bit</span> of a pointer as a "tag". If it's <span style="color:var(--accent3)">0</span>, the pointer IS the value (SMI). If it's <span style="color:var(--accent3)">1</span>, it's a real heap pointer. Enter a small number below to see its binary representation:</p>
+
+    <div class="smi-input-row">
+      <input class="smi-input" type="number" id="smiInput" value="5" min="0" max="127" oninput="updateSMI()">
+      <span style="color:var(--muted); font-size:0.85rem; font-family:'DM Mono',monospace">← type a small integer (0-127)</span>
+    </div>
+
+    <div style="margin-top:1.5rem;">
+      <div style="font-family:'DM Mono',monospace; font-size:0.72rem; color:var(--muted); margin-bottom:0.5rem;">8-bit SMI representation (value shifted left, tag bit = 0):</div>
+      <div class="bit-row" id="smiBits"></div>
+      <div style="margin-top:0.5rem; font-family:'DM Mono',monospace; font-size:0.8rem; color:var(--accent4)" id="smiExplain"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.5rem">
+    <div class="card-icon">🌐</div>
+    <h3>32-bit vs 64-bit Systems</h3>
+    <p>A <strong>32-bit</strong> system uses 32-bit addresses → can address up to <strong>4 GB of RAM</strong> (2³² bytes). A <strong>64-bit</strong> system uses 64-bit addresses → can theoretically address <strong>18 exabytes</strong> — far more RAM than any computer has today. This is why modern computers need 64-bit operating systems to use more than 4 GB of RAM.</p>
+    <div class="analogy">📮 Analogy: A 32-bit address is like a 10-digit phone number — you can only reach 10 billion unique numbers. A 64-bit address is like a phone number with 20 digits — essentially unlimited reach.</div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- SECTION 7: QUIZ -->
+<section class="section" id="s7">
+  <div class="section-number">// 07 — Test Yourself</div>
+  <h2>Quick <span class="highlight">Knowledge Check</span></h2>
+  <p>Let's see how much clicked. Click an answer to check — get instant feedback with explanations.</p>
+
+  <div class="quiz-section">
+    <div class="quiz-card">
+      <div class="quiz-q">Q1. You write <code style="color:var(--accent2)">let x = "Hello"</code> in JavaScript. Where does "Hello" actually live?</div>
+      <div class="quiz-options">
+        <button class="quiz-opt" onclick="answer(this, false)">On the Stack, since x is a variable</button>
+        <button class="quiz-opt" onclick="answer(this, true)">On the Heap — x on the stack holds a pointer to it</button>
+        <button class="quiz-opt" onclick="answer(this, false)">On the SSD, since it's a string literal</button>
+      </div>
+      <div class="quiz-feedback">✅ Correct! Strings are variable-length so they go to the heap. The stack stores a pointer (an address) to where "Hello" lives in the heap.</div>
+    </div>
+
+    <div class="quiz-card">
+      <div class="quiz-q">Q2. You do <code style="color:var(--accent2)">x = "World"</code>. What happens to "Hello"?</div>
+      <div class="quiz-options">
+        <button class="quiz-opt" onclick="answer(this, false)">It gets overwritten with "World" in the same spot</button>
+        <button class="quiz-opt" onclick="answer(this, true)">It becomes orphaned and is eventually garbage collected</button>
+        <button class="quiz-opt" onclick="answer(this, false)">It stays forever — strings are permanent</button>
+      </div>
+      <div class="quiz-feedback">✅ Correct! Primitives are immutable. "World" gets a new heap slot, x's pointer updates to point there. "Hello" is now unreferenced → garbage collector will free it.</div>
+    </div>
+
+    <div class="quiz-card">
+      <div class="quiz-q">Q3. Why can a 32-bit system only use up to 4 GB of RAM?</div>
+      <div class="quiz-options">
+        <button class="quiz-opt" onclick="answer(this, false)">Because 32-bit CPUs are physically slower</button>
+        <button class="quiz-opt" onclick="answer(this, false)">Because RAM chips only come in 4 GB sizes</button>
+        <button class="quiz-opt" onclick="answer(this, true)">Because 32 bits can only represent 2³² = ~4 billion unique addresses</button>
+      </div>
+      <div class="quiz-feedback">✅ Correct! With 32 bits, you can represent 4,294,967,296 unique addresses. Since each address points to 1 byte, the maximum addressable memory = 4 GB.</div>
+    </div>
+
+    <div class="quiz-card">
+      <div class="quiz-q">Q4. What is SMI (Small Integer) optimization?</div>
+      <div class="quiz-options">
+        <button class="quiz-opt" onclick="answer(this, false)">A way to compress large strings in the heap</button>
+        <button class="quiz-opt" onclick="answer(this, true)">Encoding small integers directly in the pointer, skipping heap allocation</button>
+        <button class="quiz-opt" onclick="answer(this, false)">A garbage collection algorithm for numbers</button>
+      </div>
+      <div class="quiz-feedback">✅ Exactly! V8 uses the tag bit: if the last bit of a pointer is 0, the pointer itself encodes the integer value — no heap access needed. This massively speeds up loop counters and arithmetic.</div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- SECTION 8: KEY TAKEAWAYS -->
+<section class="section" id="s8">
+  <div class="section-number">// 08 — Engineer's Mindset</div>
+  <h2>Think Like an <span class="highlight">Engineer</span></h2>
+  <p>The real lesson isn't just about memory — it's about how to approach any problem from first principles. Here's how to apply this thinking:</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-icon">🔍</div>
+      <h3>Ask "Why" Before "How"</h3>
+      <p>Don't memorize that strings go to the heap — understand <em>why</em>: variable size needs flexible allocation. Once you understand the constraint, the solution is obvious.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚖️</div>
+      <h3>Everything is a Trade-Off</h3>
+      <p>Stack = fast but rigid. Heap = flexible but slow. Immutability = safety but more allocations. Every design decision trades one thing for another. Recognize the trade-offs.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🏗️</div>
+      <h3>Design From Constraints</h3>
+      <p>CPU needs fast access → use RAM. Stack needs fixed sizes → use heap for dynamic data. Each constraint drives a design decision. This is engineering thinking.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔬</div>
+      <h3>Go One Level Deeper</h3>
+      <p>Most bugs and performance issues hide in the layer below your abstraction. Knowing how memory works lets you write better JS — you'll understand why mutation can be dangerous and why primitives are safe to share.</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.25rem; border-color: var(--accent)">
+    <div class="card-icon">🗺️</div>
+    <h3 style="color:var(--accent)">Your Learning Roadmap from Here</h3>
+    <p style="margin-bottom:0.5rem">Ready to go deeper? Here's what to study next, in order:</p>
+    <p style="color:#a0a0c0; font-size:0.92rem">
+      <strong style="color:var(--text)">1.</strong> Two's complement — how computers store negative numbers in binary.<br>
+      <strong style="color:var(--text)">2.</strong> 32-bit vs 64-bit architecture — memory limits and pointer sizes.<br>
+      <strong style="color:var(--text)">3.</strong> V8 engine internals — how Chrome's JavaScript engine actually works.<br>
+      <strong style="color:var(--text)">4.</strong> Garbage collection algorithms — Mark & Sweep, Reference Counting, Generational GC.<br>
+      <strong style="color:var(--text)">5.</strong> Call stack & execution contexts — how function calls use the stack.<br>
+      <strong style="color:var(--text)">6.</strong> Memory leaks in JS — closures, event listeners, and circular references.
+    </p>
+  </div>
+</section>
+
+<footer>
+  Memory Management · Made Logical · Built for curious engineers 🧠
+</footer>
+
+<script>
+// ─── PROGRESS BAR ─────────────────────────────────────────────
+window.addEventListener('scroll', () => {
+  const total = document.body.scrollHeight - window.innerHeight;
+  const progress = (window.scrollY / total) * 100;
+  document.getElementById('progress').style.width = progress + '%';
+});
+
+// ─── SCROLL REVEAL ─────────────────────────────────────────────
+const sections = document.querySelectorAll('.section');
+const sectionIds = ['s0','s1','s2','s3','s4','s5','s6','s7','s8'];
+
+// Build nav dots
+const navDots = document.getElementById('navDots');
+sectionIds.forEach((id, i) => {
+  const dot = document.createElement('div');
+  dot.className = 'nav-dot';
+  dot.title = `Section ${i}`;
+  dot.onclick = () => document.getElementById(id).scrollIntoView({behavior:'smooth'});
+  navDots.appendChild(dot);
+});
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      const idx = sectionIds.indexOf(e.target.id);
+      document.querySelectorAll('.nav-dot').forEach((d,i) => d.classList.toggle('active', i === idx));
+    }
+  });
+}, { threshold: 0.15 });
+sections.forEach(s => obs.observe(s));
+document.getElementById('s0')?.classList.add('visible');
+
+// ─── RAM VISUALIZER ────────────────────────────────────────────
+const TOTAL_CELLS = 32;
+let ramState = new Array(TOTAL_CELLS).fill(null);
+let stackPtr = 0;
+let heapPtr = 20;
+
+const ramNames = {stack: ['a=10','b=20','ptr→','i=0','x=42','flag'], heap: ['"Rohit"','"JS"','{obj}','[1,2]','"world"','arr[]']};
+let stackNameIdx = 0, heapNameIdx = 0;
+
+function buildRam() {
+  const grid = document.getElementById('ramGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < TOTAL_CELLS; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'ram-cell';
+    cell.id = 'rc-' + i;
+    cell.innerHTML = `<span class="addr">${i.toString(16).padStart(2,'0').toUpperCase()}</span><span class="val">—</span>`;
+    cell.onclick = () => showCellInfo(i);
+    grid.appendChild(cell);
+  }
+  renderRam();
+}
+
+function renderRam() {
+  for (let i = 0; i < TOTAL_CELLS; i++) {
+    const cell = document.getElementById('rc-' + i);
+    if (!cell) continue;
+    const d = ramState[i];
+    cell.className = 'ram-cell' + (d ? (d.type === 'stack' ? ' stack-cell' : ' heap-cell') : ' empty-cell');
+    cell.innerHTML = `<span class="addr">${i.toString(16).padStart(2,'0').toUpperCase()}</span><span class="val">${d ? d.val : '—'}</span>`;
+  }
+}
+
+function allocStack() {
+  if (stackPtr >= 12) { setInfo('⚠️ Stack full! Too many stack variables.'); return; }
+  const name = ramNames.stack[stackNameIdx % ramNames.stack.length];
+  stackNameIdx++;
+  const isPointer = name.includes('→');
+  ramState[stackPtr] = {type:'stack', val: isPointer ? '→heap' : name};
+  if (isPointer && heapPtr < TOTAL_CELLS) {
+    ramState[heapPtr] = {type:'heap', val: '"str"'};
+    setInfo(`📦 Stack[${stackPtr.toString(16).toUpperCase()}] = pointer → Heap[${heapPtr.toString(16).toUpperCase()}] (string stored in heap)`);
+    heapPtr++;
+  } else {
+    setInfo(`📦 Stack[${stackPtr.toString(16).toUpperCase()}] = ${name} (fixed-size integer lives here directly)`);
+  }
+  stackPtr++;
+  renderRam();
+}
+
+function allocHeap() {
+  if (heapPtr >= TOTAL_CELLS) { setInfo('⚠️ Heap full!'); return; }
+  const name = ramNames.heap[heapNameIdx % ramNames.heap.length];
+  heapNameIdx++;
+  const size = Math.floor(Math.random() * 3) + 1;
+  for (let j = 0; j < size && heapPtr < TOTAL_CELLS; j++) {
+    ramState[heapPtr] = {type:'heap', val: j===0 ? name : '···'};
+    heapPtr++;
+  }
+  setInfo(`🌊 Heap[${(heapPtr-size).toString(16).toUpperCase()}-${(heapPtr-1).toString(16).toUpperCase()}] = ${name} (${size} bytes, variable-size data)`);
+  renderRam();
+}
+
+function resetRam() {
+  ramState = new Array(TOTAL_CELLS).fill(null);
+  stackPtr = 0; heapPtr = 20; stackNameIdx = 0; heapNameIdx = 0;
+  renderRam();
+  setInfo('← Memory cleared. Allocate again!');
+}
+
+function showCellInfo(i) {
+  const d = ramState[i];
+  if (d) setInfo(`Address 0x${i.toString(16).toUpperCase()} → ${d.type.toUpperCase()} | Value: ${d.val}`);
+  else setInfo(`Address 0x${i.toString(16).toUpperCase()} → empty (free memory)`);
+}
+
+function setInfo(msg) {
+  const el = document.getElementById('ramInfo');
+  el.style.opacity = 0;
+  setTimeout(() => { el.textContent = msg; el.style.opacity = 1; }, 150);
+}
+
+buildRam();
+
+// ─── GARBAGE COLLECTOR DEMO ────────────────────────────────────
+const gcVars = [
+  {name:'str_A', live:true}, {name:'obj_B', live:true}, {name:'arr_C', live:true},
+  {name:'str_D', live:true}, {name:'func_E', live:true}, {name:'num_F', live:true},
+  {name:'obj_G', live:true}, {name:'str_H', live:true},
+];
+
+function renderGC() {
+  const stage = document.getElementById('gcStage');
+  stage.innerHTML = '';
+  gcVars.forEach(v => {
+    const cell = document.createElement('div');
+    cell.className = 'gc-cell ' + (v.cleared ? 'cleared' : v.live ? 'live' : 'dead');
+    cell.textContent = v.name;
+    stage.appendChild(cell);
+  });
+}
+
+function gcOrphan() {
+  const alive = gcVars.filter(v => v.live && !v.cleared);
+  if (!alive.length) { document.getElementById('gcLog').textContent = 'No live variables to orphan!'; return; }
+  const v = alive[Math.floor(Math.random() * alive.length)];
+  v.live = false;
+  document.getElementById('gcLog').textContent = `💀 ${v.name} is no longer referenced — it's now garbage waiting to be collected.`;
+  renderGC();
+}
+
+function runGC() {
+  const dead = gcVars.filter(v => !v.live && !v.cleared);
+  if (!dead.length) { document.getElementById('gcLog').textContent = 'No garbage to collect! Orphan some variables first.'; return; }
+  dead.forEach(v => v.cleared = true);
+  document.getElementById('gcLog').textContent = `🧹 GC ran! Freed ${dead.length} unreferenced heap block(s). Memory reclaimed.`;
+  renderGC();
+}
+
+function resetGC() {
+  gcVars.forEach(v => { v.live = true; v.cleared = false; });
+  document.getElementById('gcLog').textContent = '← Orphan some variables, then run the GC';
+  renderGC();
+}
+
+renderGC();
+
+// ─── SMI VISUALIZER ────────────────────────────────────────────
+function updateSMI() {
+  const val = parseInt(document.getElementById('smiInput').value) || 0;
+  const clamped = Math.max(0, Math.min(127, val));
+  const shifted = clamped << 1; // shift left, last bit = 0 (SMI tag)
+  const bits = shifted.toString(2).padStart(8, '0').split('');
+  const container = document.getElementById('smiBits');
+  container.innerHTML = '';
+  bits.forEach((b, i) => {
+    const bit = document.createElement('div');
+    const isTag = i === 7;
+    bit.className = 'bit ' + (b === '1' ? 'one' : 'zero') + (isTag ? ' tag' : '');
+    bit.textContent = b;
+    container.appendChild(bit);
+  });
+  const tagBit = document.createElement('span');
+  tagBit.className = 'bit-label';
+  tagBit.textContent = `← tag bit (0 = SMI, value = ${clamped}, stored directly in pointer)`;
+  container.appendChild(tagBit);
+
+  document.getElementById('smiExplain').textContent =
+    `${clamped} in binary = ${clamped.toString(2)} → shifted left → ${shifted.toString(2).padStart(8,'0')} (last bit 0 signals SMI — no heap access needed!) ✓`;
+}
+
+updateSMI();
+
+// ─── QUIZ ──────────────────────────────────────────────────────
+function answer(btn, correct) {
+  const parent = btn.closest('.quiz-card');
+  if (parent.dataset.answered) return;
+  parent.dataset.answered = '1';
+  const opts = parent.querySelectorAll('.quiz-opt');
+  opts.forEach(o => o.disabled = true);
+  btn.classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) {
+    opts.forEach(o => { if (o !== btn) { /* find correct */ } });
+  }
+  const fb = parent.querySelector('.quiz-feedback');
+  if (fb) fb.classList.add('show');
+}
+</script>
+</body>
+</html>
